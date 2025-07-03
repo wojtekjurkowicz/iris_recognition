@@ -121,6 +121,9 @@ def run_cnn(X, y, classifier='softmax'):
     train_gen = IrisDataGenerator(X_train, y_train, batch_size=BATCH_SIZE, augment=True)
     test_gen = IrisDataGenerator(X_test, y_test, batch_size=BATCH_SIZE, augment=False)
 
+    assert len(train_gen) > 0, "train_gen jest pusty"
+    assert len(test_gen) > 0, "test_gen jest pusty"
+
     checkpoint_path = "best_softmax_model.keras"
 
     if classifier == 'softmax' and os.path.exists(checkpoint_path):
@@ -169,6 +172,7 @@ def run_cnn(X, y, classifier='softmax'):
     print("Generating embeddings...")
     X_train_embed = embedding_model.predict(train_gen)
     X_test_embed = embedding_model.predict(test_gen)
+    assert np.all(np.isfinite(X_test_embed)), "Nan lub Inf w embeddingach"
 
     print("Training SVM on embeddings...")
     clf = SVC(kernel='linear', C=10)
@@ -179,4 +183,4 @@ def run_cnn(X, y, classifier='softmax'):
 
     tsne = TSNE(n_components=2, perplexity=30, random_state=42)
     X_tsne = tsne.fit_transform(X_test_embed)
-    plot_tsne(X_tsne, y_test, title="Embedding separability (t-SNE)", filename=f"tsne_plot_cnn_{classifier}.png")
+    plot_tsne(X_tsne, np.argmax(y_test, axis=1), title="Embedding separability (t-SNE)", filename=f"tsne_plot_cnn_{classifier}.png")
