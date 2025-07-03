@@ -113,6 +113,11 @@ def run_cnn(X, y, classifier='softmax'):
         X, y_encoded, test_size=0.2, stratify=y_encoded, random_state=42
     )
 
+    if X_train.shape[0] == 0 or X_test.shape[0] == 0:
+        raise ValueError("Zbiór treningowy lub testowy ma 0 próbek — sprawdź subset albo dane wejściowe.")
+
+    print(f"[DEBUG] X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+    print(f"[DEBUG] X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
     train_gen = IrisDataGenerator(X_train, y_train, batch_size=BATCH_SIZE, augment=True)
     test_gen = IrisDataGenerator(X_test, y_test, batch_size=BATCH_SIZE, augment=False)
 
