@@ -13,10 +13,17 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import classification_report
 from utils.visualization import plot_tsne
 from tensorflow import keras
+from keras.saving import load_model
 import random
+import os
 import matplotlib
 matplotlib.use("Agg")  # lub "TkAgg" jeśli masz GUI
 import matplotlib.pyplot as plt
+
+
+class L2Normalization(tf.keras.layers.Layer):
+    def call(self, inputs):
+        return tf.math.l2_normalize(inputs, axis=1)
 
 
 class IrisDataGenerator(keras.utils.Sequence):
@@ -72,7 +79,7 @@ def build_embedding_model(input_shape):
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(0.5)(x)
     embedding = layers.Dense(128, activation='relu')(x)
-    embedding = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))(embedding)
+    embedding = L2Normalization()(embedding)
 
     return models.Model(inputs=base_model.input, outputs=embedding, name="embedding_model")
 
@@ -96,7 +103,11 @@ def run_cnn(X, y, classifier='softmax'):
 
     classes = sorted(list(set(y)))
     label_to_idx = {label: idx for idx, label in enumerate(classes)}
-    y_encoded = tf.keras.utils.to_categorical([label_to_idx[label] for label in y])
+    y_encoded = tf.keras.utils.to_categorical(
+        [label_to_idx[label] for label in y],
+        num_classes=len(classes)
+    )
+    print(f"[DEBUG] y_encoded shape: {y_encoded.shape}, num_classes: {len(classes)}")
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y_encoded, test_size=0.2, stratify=y_encoded, random_state=42
@@ -105,10 +116,32 @@ def run_cnn(X, y, classifier='softmax'):
     train_gen = IrisDataGenerator(X_train, y_train, batch_size=BATCH_SIZE, augment=True)
     test_gen = IrisDataGenerator(X_test, y_test, batch_size=BATCH_SIZE, augment=False)
 
-    embedding_model = build_embedding_model((*IMG_SIZE, 3))
+    checkpoint_path = "best_softmax_model.keras"
 
-    if classifier == 'softmax':
+    if classifier == 'softmax' and os.path.exists(checkpoint_path):
+        print(f"[INFO] Loading model from checkpoint: {checkpoint_path}")
+        model = models.load_model(checkpoint_path)
+        embedding_model = keras.Model(inputs=model.input, outputs=model.layers[-2].output)
+
+        initial_epoch = 100
+        loss_fn = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)
+        model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
+        callbacks = [
+            EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
+            ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
+            ModelCheckpoint("best_softmax_model.keras", monitor='val_accuracy', save_best_only=True)
+        ]
+        history = model.fit(
+            train_gen,
+            validation_data=test_gen,
+            epochs=100,  # możesz też ustawić np. 150
+            initial_epoch=initial_epoch,
+            callbacks=[callbacks]
+        )
+    else:
+        embedding_model = build_embedding_model((*IMG_SIZE, 3))
         model = build_classifier_model(embedding_model, num_classes=len(classes))
+
         loss_fn = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)
         model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
 

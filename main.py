@@ -2,10 +2,12 @@ import argparse
 import time
 from data_loader import load_or_segment_data
 from config import DATASET_PATH
+from keras import config
 from svm_pipeline import run_svm
 from cnn_pipeline import run_cnn
 from collections import Counter
 from segmentation import get_fallback_count
+config.enable_unsafe_deserialization()
 
 
 def main():
