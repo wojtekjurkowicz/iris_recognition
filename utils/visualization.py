@@ -7,7 +7,8 @@ def plot_tsne(X_tsne, labels, title="t-SNE", filename="tsne_plot.png"):
     unique_labels = np.unique(labels)
     for label in unique_labels:
         idx = labels == label
-        plt.scatter(X_tsne[idx, 0], X_tsne[idx, 1], label=str(label), s=15)
+        x = X_tsne[idx]
+        plt.scatter(x[:, 0], x[:, 1], label=str(label), s=15)
     plt.title(title)
     plt.xlabel("t-SNE dim 1")
     plt.ylabel("t-SNE dim 2")

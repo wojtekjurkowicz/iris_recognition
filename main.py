@@ -26,18 +26,9 @@ def main():
         X, y = load_or_segment_data(DATASET_PATH, use_hog=False)
         run_cnn(X, y, classifier=args.classifier)
 
-    num_classes = len(set(y))
-    print(f"Liczba unikalnych klas: {num_classes}")
+    print(f"Liczba unikalnych klas: {len(set(y))}")
 
     if args.subset is not None:
-        min_samples_per_class = 5  # można to uczynić argumentem
-        min_required = num_classes * min_samples_per_class
-
-        if args.subset < min_required:
-            print(f"[INFO] Podany subset={args.subset} jest zbyt mały względem liczby klas.")
-            print(f"[INFO] Zwiększam subset do {min_required} (czyli {min_samples_per_class} próbek na klasę).")
-            args.subset = min_required
-
         print(f"Using subset: {args.subset} samples")
         if args.subset < len(X):
             X = X[:args.subset]
