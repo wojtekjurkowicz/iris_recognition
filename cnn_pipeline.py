@@ -1,25 +1,69 @@
 # from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
-from keras.applications.efficientnet import EfficientNetB0, preprocess_input
+import os
+
+import matplotlib
 import numpy as np
-from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from config import IMG_SIZE, BATCH_SIZE, EPOCHS
 from keras import layers, models
-from sklearn.utils.class_weight import compute_class_weight
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from keras import regularizers
-from sklearn.svm import SVC
+from keras.applications.efficientnet import EfficientNetB0, preprocess_input
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.metrics import classification_report
-from utils.visualization import plot_tsne
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.utils.class_weight import compute_class_weight
 from tensorflow import keras
-from sklearn.decomposition import PCA
-from keras.saving import load_model
-import random
-import os
-import matplotlib
-matplotlib.use("Agg")  # lub "TkAgg" jeśli masz GUI
+import cv2
 import matplotlib.pyplot as plt
+from segmentation import segment_iris
+from keras.applications.efficientnet import preprocess_input
+from config import IMG_SIZE, BATCH_SIZE, EPOCHS
+from utils.visualization import plot_tsne
+
+matplotlib.use("Agg")  # lub "TkAgg" jeśli masz GUI
+
+
+def visualize_pipeline_for_user(user_id, dataset_path):
+    """
+    Wyświetla kolejne etapy przetwarzania jednego oka danego użytkownika.
+    """
+    import os
+    from glob import glob
+
+    user_path = os.path.join(dataset_path, user_id, "L")
+    img_files = glob(os.path.join(user_path, "*.jpg"))
+    if not img_files:
+        print(f"Brak zdjęć dla użytkownika {user_id} w {user_path}")
+        return
+
+    img = cv2.imread(img_files[0], cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        print("Nie udało się wczytać obrazu.")
+        return
+
+    # Segmentacja
+    segmented = segment_iris(img)
+
+    # Przygotowanie do sieci
+    img_3ch = np.repeat(segmented[..., np.newaxis], 3, axis=-1)
+    img_preprocessed = preprocess_input(img_3ch.astype("float32"))
+
+    # Wizualizacja
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+    axs[0].imshow(img, cmap='gray')
+    axs[0].set_title("Oryginalne zdjęcie")
+    axs[1].imshow(segmented, cmap='gray')
+    axs[1].set_title("Po segmentacji (tęczówka)")
+    axs[2].imshow(img_preprocessed.astype("float32") / 255.0)
+    axs[2].set_title("Wejście do sieci (3 kanały)")
+
+    for ax in axs:
+        ax.axis('off')
+
+    plt.tight_layout()
+    plt.show()
 
 
 class L2Normalization(tf.keras.layers.Layer):
@@ -79,8 +123,7 @@ def build_embedding_model(input_shape):
     x = layers.Dense(256, activation='relu')(x)
     x = layers.BatchNormalization()(x)
     x = layers.Dropout(0.5)(x)
-    embedding = layers.Dense(128, activation='relu')(x)
-    embedding = L2Normalization()(embedding)
+    embedding = layers.Dense(128, activation='relu', name="embedding")(x)
 
     return models.Model(inputs=base_model.input, outputs=embedding, name="embedding_model")
 
@@ -130,7 +173,7 @@ def run_cnn(X, y, classifier='softmax'):
     if classifier == 'softmax' and os.path.exists(checkpoint_path):
         print(f"[INFO] Loading model from checkpoint: {checkpoint_path}")
         model = models.load_model(checkpoint_path)
-        embedding_model = keras.Model(inputs=model.input, outputs=model.layers[-2].output)
+        embedding_model = keras.Model(inputs=model.input, outputs=model.get_layer("embedding").output)
 
         initial_epoch = 100
         loss_fn = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)
@@ -176,6 +219,8 @@ def run_cnn(X, y, classifier='softmax'):
     print("Generating embeddings...")
     X_train_embed = embedding_model.predict(train_gen)
     X_test_embed = embedding_model.predict(test_gen)
+    print("[DEBUG] Embedding std:", np.std(X_test_embed))
+    print("[DEBUG] Embedding mean:", np.mean(X_test_embed))
     assert np.all(np.isfinite(X_test_embed)), "Nan lub Inf w embeddingach"
 
     print("Training SVM on embeddings...")
