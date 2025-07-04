@@ -13,6 +13,7 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import classification_report
 from utils.visualization import plot_tsne
 from tensorflow import keras
+from sklearn.decomposition import PCA
 from keras.saving import load_model
 import random
 import os
@@ -137,7 +138,7 @@ def run_cnn(X, y, classifier='softmax'):
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
             ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
-            ModelCheckpoint("best_softmax_model.keras", monitor='val_accuracy', save_best_only=True)
+            ModelCheckpoint(f"best_model_{classifier}.keras", monitor='val_accuracy', save_best_only=True)
         ]
         history = model.fit(
             train_gen,
@@ -167,7 +168,7 @@ def run_cnn(X, y, classifier='softmax'):
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
         model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=[callbacks],
-                  class_weight=class_weights, verbose=1)
+                  class_weight=class_weights, verbose=2)
 
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
@@ -178,12 +179,19 @@ def run_cnn(X, y, classifier='softmax'):
     assert np.all(np.isfinite(X_test_embed)), "Nan lub Inf w embeddingach"
 
     print("Training SVM on embeddings...")
-    clf = SVC(kernel='linear', C=10)
-    clf.fit(X_train_embed, np.argmax(y_train, axis=1))
-    y_pred = clf.predict(X_test_embed)
-    print("[SVM on embeddings] Classification report:")
-    print(classification_report(np.argmax(y_test, axis=1), y_pred, target_names=classes))
+    pca = PCA(n_components=64, random_state=42)
+    X_train_pca = pca.fit_transform(X_train_embed)
+    X_test_pca = pca.transform(X_test_embed)
 
+    clf = SVC(kernel='rbf', C=1)
+    clf.fit(X_train_pca, np.argmax(y_train, axis=1))
+    y_pred = clf.predict(X_test_pca)
+    print("[SVM on embeddings] Classification report:")
+    print(classification_report(
+        np.argmax(y_test, axis=1),
+        y_pred,
+        target_names=[str(i).zfill(3) for i in range(len(classes))]
+    ))
     tsne = TSNE(n_components=2, perplexity=30, random_state=42)
     X_tsne = tsne.fit_transform(X_test_embed)
     assert np.all(np.isfinite(X_tsne)), "t-SNE contains NaN or Inf values"
