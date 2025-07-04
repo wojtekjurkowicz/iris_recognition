@@ -124,7 +124,7 @@ def run_cnn(X, y, classifier='softmax'):
     assert len(train_gen) > 0, "train_gen jest pusty"
     assert len(test_gen) > 0, "test_gen jest pusty"
 
-    checkpoint_path = "best_softmax_model.keras"
+    checkpoint_path = f"best_model_{classifier}.keras"
 
     if classifier == 'softmax' and os.path.exists(checkpoint_path):
         print(f"[INFO] Loading model from checkpoint: {checkpoint_path}")
@@ -146,6 +146,8 @@ def run_cnn(X, y, classifier='softmax'):
             initial_epoch=initial_epoch,
             callbacks=[callbacks]
         )
+        loss, acc = model.evaluate(test_gen)
+        print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
     else:
         embedding_model = build_embedding_model((*IMG_SIZE, 3))
         model = build_classifier_model(embedding_model, num_classes=len(classes))
@@ -164,7 +166,7 @@ def run_cnn(X, y, classifier='softmax'):
         ]
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
-        model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=callbacks,
+        model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=[callbacks],
                   class_weight=class_weights, verbose=1)
 
         loss, acc = model.evaluate(test_gen)
@@ -184,5 +186,5 @@ def run_cnn(X, y, classifier='softmax'):
 
     tsne = TSNE(n_components=2, perplexity=30, random_state=42)
     X_tsne = tsne.fit_transform(X_test_embed)
-    assert np.all(np.isfinite(X_test_embed)), "Embedding contains NaN or Inf values"
+    assert np.all(np.isfinite(X_tsne)), "t-SNE contains NaN or Inf values"
     plot_tsne(X_tsne, np.argmax(y_test, axis=1), title="Embedding separability (t-SNE)", filename=f"tsne_plot_cnn_{classifier}.png")
