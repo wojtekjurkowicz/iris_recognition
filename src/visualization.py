@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import os
 import matplotlib.pyplot as plt
 import cv2
 from src.segmentation import segment_iris

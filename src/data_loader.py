@@ -3,7 +3,7 @@ from glob import glob
 import cv2
 import numpy as np
 from skimage.feature import hog
-from segmentation import segment_iris
+from src.segmentation import segment_iris
 
 
 def load_data(base_path, use_hog=True):
