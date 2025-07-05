@@ -1,26 +1,22 @@
 # from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
 import os
 
+import cv2
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from keras import layers, models
 from keras import regularizers
-from keras.applications.efficientnet import EfficientNetB0, preprocess_input
+from keras.applications.efficientnet import EfficientNetB0
+from keras.applications.efficientnet import preprocess_input
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
-from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow import keras
-import cv2
-import matplotlib.pyplot as plt
-from segmentation import segment_iris
-from keras.applications.efficientnet import preprocess_input
+from sklearn.metrics import classification_report, confusion_matrix
 from config import IMG_SIZE, BATCH_SIZE, EPOCHS
-from utils.visualization import plot_tsne
+from segmentation import segment_iris
 
 matplotlib.use("Agg")  # lub "TkAgg" jeśli masz GUI
 
@@ -135,8 +131,8 @@ def build_classifier_model(embedding_model, num_classes):
     return models.Model(inputs=inputs, outputs=outputs, name="classifier_model")
 
 
-def run_cnn(X, y, classifier='softmax'):
-    print(f"Running CNN classifier with `{classifier}` head...")
+def run_cnn(X, y):
+    print(f"Running CNN classifier with softmax head...")
     print("Shape przed:", X.shape)
 
     if X.shape[-1] != IMG_SIZE[0]:  # dane spłaszczone
@@ -168,9 +164,9 @@ def run_cnn(X, y, classifier='softmax'):
     assert len(train_gen) > 0, "train_gen jest pusty"
     assert len(test_gen) > 0, "test_gen jest pusty"
 
-    checkpoint_path = f"best_model_{classifier}.keras"
+    checkpoint_path = f"best_model_softmax.keras"
 
-    if classifier == 'softmax' and os.path.exists(checkpoint_path):
+    if os.path.exists(checkpoint_path):
         print(f"[INFO] Loading model from checkpoint: {checkpoint_path}")
         model = models.load_model(checkpoint_path)
         embedding_model = keras.Model(inputs=model.input, outputs=model.get_layer("embedding").output)
@@ -181,14 +177,14 @@ def run_cnn(X, y, classifier='softmax'):
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
             ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
-            ModelCheckpoint(f"best_model_{classifier}.keras", monitor='val_accuracy', save_best_only=True)
+            ModelCheckpoint(f"best_model_softmax.keras", monitor='val_accuracy', save_best_only=True)
         ]
         history = model.fit(
             train_gen,
             validation_data=test_gen,
             epochs=100,  # możesz też ustawić np. 150
             initial_epoch=initial_epoch,
-            callbacks=[callbacks]
+            callbacks=callbacks
         )
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
@@ -210,34 +206,20 @@ def run_cnn(X, y, classifier='softmax'):
         ]
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
-        model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=[callbacks],
-                  class_weight=class_weights, verbose=2)
+        model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=callbacks,
+                  class_weight=class_weights, verbose=1)
 
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
 
-    print("Generating embeddings...")
-    X_train_embed = embedding_model.predict(train_gen)
-    X_test_embed = embedding_model.predict(test_gen)
-    print("[DEBUG] Embedding std:", np.std(X_test_embed))
-    print("[DEBUG] Embedding mean:", np.mean(X_test_embed))
-    assert np.all(np.isfinite(X_test_embed)), "Nan lub Inf w embeddingach"
+        y_true = np.argmax(np.vstack([y for _, y in test_gen]), axis=1)
+        y_pred = np.argmax(model.predict(test_gen), axis=1)
 
-    print("Training SVM on embeddings...")
-    pca = PCA(n_components=64, random_state=42)
-    X_train_pca = pca.fit_transform(X_train_embed)
-    X_test_pca = pca.transform(X_test_embed)
+        print("[SOFTMAX] Classification report:")
+        print(classification_report(y_true, y_pred))
 
-    clf = SVC(kernel='rbf', C=1)
-    clf.fit(X_train_pca, np.argmax(y_train, axis=1))
-    y_pred = clf.predict(X_test_pca)
-    print("[SVM on embeddings] Classification report:")
-    print(classification_report(
-        np.argmax(y_test, axis=1),
-        y_pred,
-        target_names=[str(i).zfill(3) for i in range(len(classes))]
-    ))
-    tsne = TSNE(n_components=2, perplexity=30, random_state=42)
-    X_tsne = tsne.fit_transform(X_test_embed)
-    assert np.all(np.isfinite(X_tsne)), "t-SNE contains NaN or Inf values"
-    plot_tsne(X_tsne, np.argmax(y_test, axis=1), title="Embedding separability (t-SNE)", filename=f"tsne_plot_cnn_{classifier}.png")
+        with open("report.txt", "w") as f:
+            f.write(classification_report(y_true, y_pred))
+
+        cm = confusion_matrix(y_true, y_pred)
+        np.save("confusion_matrix.npy", cm)

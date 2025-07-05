@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from config import IMG_SIZE
+import os
+os.makedirs("fallbacks", exist_ok=True)
 
 fallback_count = 0
 
