@@ -1,18 +1,15 @@
 import cv2
 import numpy as np
-from config import IMG_SIZE
+from src.config import IMG_SIZE
 import os
 os.makedirs("fallbacks", exist_ok=True)
 
-fallback_count = 0
 
+def segment_iris(img, disable_fallback_write=False):
+    assert img is not None and img.size > 0, "Błąd: wejściowy obraz jest pusty lub None."
+    if len(img.shape) != 2:
+        raise ValueError("Oczekiwano obrazu w skali szarości (2D ndarray).")
 
-def get_fallback_count():
-    global fallback_count
-    return fallback_count
-
-
-def segment_iris(img):
     img_small = cv2.resize(img, (80, 80))
     img_blur = cv2.medianBlur(img_small, 5)
     circles = cv2.HoughCircles(
@@ -57,7 +54,6 @@ def segment_iris(img):
         cropped = cv2.resize(cropped, IMG_SIZE)
         return cropped
     else:
-        global fallback_count
-        fallback_count += 1
-        cv2.imwrite(f"fallbacks/fallback_{fallback_count}.png", img)
+        if not disable_fallback_write:
+            cv2.imwrite(f"fallbacks/fallback_{len(os.listdir('fallbacks'))}.png", img)
         return cv2.resize(img, IMG_SIZE)

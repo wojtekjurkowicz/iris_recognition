@@ -1,41 +1,54 @@
 import argparse
+import os
 import time
-from data_loader import load_or_segment_data
-from config import DATASET_PATH
+from src.data_loader import load_or_segment_data
+from src.config import DATASET_PATH
 from keras import config
-from svm_pipeline import run_svm
-from cnn_pipeline import run_cnn, visualize_pipeline_for_user
+from src.cnn_pipeline import run_cnn
 from collections import Counter
-from segmentation import get_fallback_count
+from src.visualization import visualize_pipeline_for_user
 config.enable_unsafe_deserialization()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', choices=['svm', 'cnn'], required=True, help="Model to run: svm or cnn")
     parser.add_argument('--subset', type=int, default=None, help="Use only a subset of data")
     parser.add_argument('--no-viz', action='store_true', help="Nie pokazuj wizualizacji pipeline'u")
+    parser.add_argument('--epochs', type=int, default=None, help="Liczba epok treningu")
+    parser.add_argument('--batch', type=int, default=None, help="Wielkość batcha")
     args = parser.parse_args()
 
     start = time.time()
 
-    if args.model == 'cnn':
-        X, y = load_or_segment_data(DATASET_PATH, use_hog=False)
+    X, y = load_or_segment_data(DATASET_PATH, use_hog=False)
 
-        if args.subset is not None:
-            print(f"Using subset: {args.subset} samples")
-            if args.subset < len(X):
-                X = X[:args.subset]
-                y = y[:args.subset]
-            else:
-                print(f"Warning: requested subset {args.subset} > available {len(X)}. Using all samples.")
+    if args.subset is not None:
+        print(f"Using subset: {args.subset} samples")
+        if args.subset < len(X):
+            X = X[:args.subset]
+            y = y[:args.subset]
+        else:
+            print(f"Warning: requested subset {args.subset} > available {len(X)}. Using all samples.")
 
-        run_cnn(X, y)
+    # Walidacja liczby klas
+    unique_classes = set(y)
+    if len(unique_classes) < 2:
+        raise ValueError("Znaleziono mniej niż 2 klasy. Nie można trenować klasyfikatora.")
 
-        print(f"Liczba unikalnych klas: {len(set(y))}")
-        print(Counter(y))
+    # ⚖Sprawdzenie niezbalansowanych danych
+    class_counts = Counter(y)
+    most_common_ratio = max(class_counts.values()) / len(y)
+    if most_common_ratio > 0.8:
+        print("[UWAGA] Dane są mocno niezbalansowane (jedna klasa >80%).")
 
-    print(f"Fallback użyty w segmentacji: {get_fallback_count()} razy")
+    run_cnn(X, y, epochs=args.epochs, batch_size=args.batch)
+
+    if os.path.exists("fallbacks"):
+        fallback_count = len([f for f in os.listdir("fallbacks") if f.endswith(".png")])
+        print(f"Fallback użyty w segmentacji: {fallback_count} razy")
+
+    print(f"Liczba unikalnych klas: {len(unique_classes)}")
+    print(class_counts)
 
     if not args.no_viz:
         visualize_pipeline_for_user("005", DATASET_PATH)
@@ -47,5 +60,5 @@ def main():
 if __name__ == "__main__":
     import sys
 
-    sys.argv = ["program", "--model", "cnn", "--subset", "10000"]
+    sys.argv = ["program", "--subset", "10000"]
     main()

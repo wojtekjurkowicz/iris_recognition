@@ -1,70 +1,18 @@
-# from keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
 import os
-
-import cv2
 import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from keras import layers, models
-from keras import regularizers
-from keras.applications.efficientnet import EfficientNetB0
+from keras import models
 from keras.applications.efficientnet import preprocess_input
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow import keras
-from sklearn.metrics import classification_report, confusion_matrix
-from config import IMG_SIZE, BATCH_SIZE, EPOCHS
-from segmentation import segment_iris
+from src.config import IMG_SIZE, BATCH_SIZE, EPOCHS
+from src.metrics import save_classification_report, save_confusion_matrix
+from src.model_utils import build_embedding_model, build_classifier_model
 
-matplotlib.use("Agg")  # lub "TkAgg" jeśli masz GUI
-
-
-def visualize_pipeline_for_user(user_id, dataset_path):
-    """
-    Wyświetla kolejne etapy przetwarzania jednego oka danego użytkownika.
-    """
-    import os
-    from glob import glob
-
-    user_path = os.path.join(dataset_path, user_id, "L")
-    img_files = glob(os.path.join(user_path, "*.jpg"))
-    if not img_files:
-        print(f"Brak zdjęć dla użytkownika {user_id} w {user_path}")
-        return
-
-    img = cv2.imread(img_files[0], cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        print("Nie udało się wczytać obrazu.")
-        return
-
-    # Segmentacja
-    segmented = segment_iris(img)
-
-    # Przygotowanie do sieci
-    img_3ch = np.repeat(segmented[..., np.newaxis], 3, axis=-1)
-    img_preprocessed = preprocess_input(img_3ch.astype("float32"))
-
-    # Wizualizacja
-    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-    axs[0].imshow(img, cmap='gray')
-    axs[0].set_title("Oryginalne zdjęcie")
-    axs[1].imshow(segmented, cmap='gray')
-    axs[1].set_title("Po segmentacji (tęczówka)")
-    axs[2].imshow(img_preprocessed.astype("float32") / 255.0)
-    axs[2].set_title("Wejście do sieci (3 kanały)")
-
-    for ax in axs:
-        ax.axis('off')
-
-    plt.tight_layout()
-    plt.show()
-
-
-class L2Normalization(tf.keras.layers.Layer):
-    def call(self, inputs):
-        return tf.math.l2_normalize(inputs, axis=1)
+matplotlib.use("Agg")
 
 
 class IrisDataGenerator(keras.utils.Sequence):
@@ -100,40 +48,12 @@ class IrisDataGenerator(keras.utils.Sequence):
         np.random.shuffle(self.indices)
 
 
-def build_embedding_model(input_shape):
-    base_model = EfficientNetB0(
-        input_shape=input_shape,
-        include_top=False,
-        weights='imagenet',
-        pooling='avg'
-    )
-    base_model.trainable = True
-    for layer in base_model.layers[:-30]:
-        layer.trainable = False
-
-    x = base_model.output
-    # x = layers.GlobalAveragePooling2D()(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dense(256, activation='relu', kernel_regularizer=regularizers.l2(0.02))(x)
-    x = layers.Dropout(0.4)(x)
-    x = layers.Dense(256, activation='relu')(x)
-    x = layers.BatchNormalization()(x)
-    x = layers.Dropout(0.5)(x)
-    embedding = layers.Dense(128, activation='relu', name="embedding")(x)
-
-    return models.Model(inputs=base_model.input, outputs=embedding, name="embedding_model")
-
-
-def build_classifier_model(embedding_model, num_classes):
-    inputs = embedding_model.input
-    x = embedding_model.output
-    outputs = layers.Dense(num_classes, activation='softmax')(x)
-    return models.Model(inputs=inputs, outputs=outputs, name="classifier_model")
-
-
-def run_cnn(X, y):
+def run_cnn(X, y, epochs=None, batch_size=None):
     print(f"Running CNN classifier with softmax head...")
     print("Shape przed:", X.shape)
+
+    batch_size = batch_size or BATCH_SIZE
+    epochs = epochs or EPOCHS
 
     if X.shape[-1] != IMG_SIZE[0]:  # dane spłaszczone
         try:
@@ -158,13 +78,14 @@ def run_cnn(X, y):
 
     print(f"[DEBUG] X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
     print(f"[DEBUG] X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
-    train_gen = IrisDataGenerator(X_train, y_train, batch_size=BATCH_SIZE, augment=True)
-    test_gen = IrisDataGenerator(X_test, y_test, batch_size=BATCH_SIZE, augment=False)
+    train_gen = IrisDataGenerator(X_train, y_train, batch_size=batch_size, augment=True)
+    test_gen = IrisDataGenerator(X_test, y_test, batch_size=batch_size, augment=False)
 
     assert len(train_gen) > 0, "train_gen jest pusty"
     assert len(test_gen) > 0, "test_gen jest pusty"
 
-    checkpoint_path = f"best_model_softmax.keras"
+    os.makedirs("models", exist_ok=True)
+    checkpoint_path = "models/best_model_softmax.keras"
 
     if os.path.exists(checkpoint_path):
         print(f"[INFO] Loading model from checkpoint: {checkpoint_path}")
@@ -177,12 +98,12 @@ def run_cnn(X, y):
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
             ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
-            ModelCheckpoint(f"best_model_softmax.keras", monitor='val_accuracy', save_best_only=True)
+            ModelCheckpoint("models/best_model_softmax.keras", monitor='val_accuracy', save_best_only=True)
         ]
         history = model.fit(
             train_gen,
             validation_data=test_gen,
-            epochs=100,  # możesz też ustawić np. 150
+            epochs=epochs,  # możesz też ustawić np. 150
             initial_epoch=initial_epoch,
             callbacks=callbacks
         )
@@ -206,7 +127,7 @@ def run_cnn(X, y):
         ]
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
-        model.fit(train_gen, validation_data=test_gen, epochs=EPOCHS, callbacks=callbacks,
+        model.fit(train_gen, validation_data=test_gen, epochs=epochs, callbacks=callbacks,
                   class_weight=class_weights, verbose=1)
 
         loss, acc = model.evaluate(test_gen)
@@ -216,10 +137,5 @@ def run_cnn(X, y):
         y_pred = np.argmax(model.predict(test_gen), axis=1)
 
         print("[SOFTMAX] Classification report:")
-        print(classification_report(y_true, y_pred))
-
-        with open("report.txt", "w") as f:
-            f.write(classification_report(y_true, y_pred))
-
-        cm = confusion_matrix(y_true, y_pred)
-        np.save("confusion_matrix.npy", cm)
+        save_classification_report(y_true, y_pred, out_path="outputs/report.txt")
+        save_confusion_matrix(y_true, y_pred, out_path="outputs/confusion_matrix.npy")
