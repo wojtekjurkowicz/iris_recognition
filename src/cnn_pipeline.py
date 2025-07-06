@@ -133,8 +133,11 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
 
-        y_true = np.argmax(np.vstack([y for _, y in test_gen]), axis=1)
-        y_pred = np.argmax(model.predict(test_gen), axis=1)
+        y_true, y_pred = [], []
+        for X_batch, y_batch in test_gen:
+            preds = model.predict(X_batch, verbose=0)
+            y_true.extend(np.argmax(y_batch, axis=1))
+            y_pred.extend(np.argmax(preds, axis=1))
 
         print("[SOFTMAX] Classification report:")
         save_classification_report(y_true, y_pred, out_path="outputs/report.txt")
