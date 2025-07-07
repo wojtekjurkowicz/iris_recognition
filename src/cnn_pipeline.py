@@ -136,8 +136,10 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
 
+        from tqdm import tqdm
+
         y_true, y_pred = [], []
-        for X_batch, y_batch in test_gen:
+        for X_batch, y_batch in tqdm(test_gen, desc="[PREDICTING TEST]"):
             if len(X_batch) == 0:
                 continue
 
