@@ -55,5 +55,8 @@ def segment_iris(img, disable_fallback_write=False):
         return cropped
     else:
         if not disable_fallback_write:
-            cv2.imwrite(f"fallbacks/fallback_{len(os.listdir('fallbacks'))}.png", img)
+            fallback_index = len(os.listdir("fallbacks"))
+            fallback_path = f"fallbacks/fallback_{fallback_index}.png"
+            cv2.imwrite(fallback_path, img)
+            print(f"[FALLBACK] Zapisano fallback nr {fallback_index}: {fallback_path}")
         return cv2.resize(img, IMG_SIZE)

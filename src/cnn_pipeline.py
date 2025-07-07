@@ -11,7 +11,7 @@ from sklearn.utils.class_weight import compute_class_weight
 from src.config import IMG_SIZE, BATCH_SIZE, EPOCHS
 from src.metrics import save_classification_report, save_confusion_matrix
 from src.model_utils import build_embedding_model, build_classifier_model
-
+from src.visualization import plot_training_metrics, plot_confusion_matrix
 matplotlib.use("Agg")
 csv_logger = CSVLogger('training_log.csv', append=True)
 
@@ -148,3 +148,6 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         print("[SOFTMAX] Classification report:")
         save_classification_report(y_true, y_pred, out_path="outputs/report.txt")
         save_confusion_matrix(y_true, y_pred, out_path="outputs/confusion_matrix.npy")
+        plot_training_metrics()
+        plot_confusion_matrix()
+
