@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from keras import models
 from keras.applications.efficientnet import preprocess_input
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint, CSVLogger
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from src.config import IMG_SIZE, BATCH_SIZE, EPOCHS
@@ -13,6 +13,7 @@ from src.metrics import save_classification_report, save_confusion_matrix
 from src.model_utils import build_embedding_model, build_classifier_model
 
 matplotlib.use("Agg")
+csv_logger = CSVLogger('training_log.csv', append=True)
 
 
 class IrisDataGenerator(keras.utils.Sequence):
@@ -93,7 +94,7 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         model = models.load_model(checkpoint_path)
         embedding_model = keras.Model(inputs=model.input, outputs=model.get_layer("embedding").output)
 
-        initial_epoch = 100
+        initial_epoch = 0
         loss_fn = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)
         model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
         callbacks = [
@@ -124,7 +125,8 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         callbacks = [
             EarlyStopping(monitor='val_accuracy', patience=5, restore_best_weights=True),
             ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
-            ModelCheckpoint("best_softmax_model.keras", monitor='val_accuracy', save_best_only=True)
+            ModelCheckpoint("models/best_model_softmax.keras", monitor='val_accuracy', save_best_only=True),
+            csv_logger
         ]
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
@@ -136,6 +138,9 @@ def run_cnn(X, y, epochs=None, batch_size=None):
 
         y_true, y_pred = [], []
         for X_batch, y_batch in test_gen:
+            if len(X_batch) == 0:
+                continue
+
             preds = model.predict(X_batch, verbose=0)
             y_true.extend(np.argmax(y_batch, axis=1))
             y_pred.extend(np.argmax(preds, axis=1))
