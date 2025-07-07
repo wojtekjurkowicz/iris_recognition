@@ -122,7 +122,7 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         class_weights = dict(enumerate(class_weights))
 
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
+            EarlyStopping(monitor='val_accuracy', patience=5, restore_best_weights=True),
             ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
             ModelCheckpoint("best_softmax_model.keras", monitor='val_accuracy', save_best_only=True)
         ]
