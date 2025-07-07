@@ -1,4 +1,5 @@
 import os
+import keras
 import matplotlib
 import numpy as np
 import tensorflow as tf
@@ -7,7 +8,6 @@ from keras.applications.efficientnet import preprocess_input
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
-from tensorflow import keras
 from src.config import IMG_SIZE, BATCH_SIZE, EPOCHS
 from src.metrics import save_classification_report, save_confusion_matrix
 from src.model_utils import build_embedding_model, build_classifier_model
@@ -16,7 +16,8 @@ matplotlib.use("Agg")
 
 
 class IrisDataGenerator(keras.utils.Sequence):
-    def __init__(self, X, y, batch_size, augment=False):
+    def __init__(self, X, y, batch_size, augment=False, **kwargs):
+        super().__init__(**kwargs)
         self.X = X
         self.y = y
         self.batch_size = batch_size
