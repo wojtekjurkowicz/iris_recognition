@@ -5,7 +5,7 @@ import os
 os.makedirs("fallbacks", exist_ok=True)
 
 
-def segment_iris(img, disable_fallback_write=False):
+def segment_iris(img, disable_fallback_write=False, debug_path=None):
     assert img is not None and img.size > 0, "Błąd: wejściowy obraz jest pusty lub None."
     if len(img.shape) != 2:
         raise ValueError("Oczekiwano obrazu w skali szarości (2D ndarray).")
@@ -52,6 +52,13 @@ def segment_iris(img, disable_fallback_write=False):
             return cv2.resize(img, IMG_SIZE)
 
         cropped = cv2.resize(cropped, IMG_SIZE)
+
+        # DEBUG: zapisz wykrycie jeśli ścieżka podana
+        if debug_path:
+            debug_img = cv2.cvtColor(img.copy(), cv2.COLOR_GRAY2BGR)
+            cv2.circle(debug_img, (x, y), r, (0, 255, 0), 2)
+            cv2.imwrite(debug_path, debug_img)
+
         return cropped
     else:
         if not disable_fallback_write:

@@ -7,7 +7,7 @@ from src.config import DATASET_PATH
 from keras import config
 from src.cnn_pipeline import run_cnn
 from collections import Counter
-from src.visualization import visualize_pipeline_for_user
+from src.visualization import visualize_pipeline_for_user, visualize_fallback_samples, analyze_fallback_patterns
 config.enable_unsafe_deserialization()
 
 
@@ -53,6 +53,9 @@ def main():
 
     if not args.no_viz:
         visualize_pipeline_for_user(DATASET_PATH)
+
+    visualize_fallback_samples(n=8)
+    analyze_fallback_patterns()
 
     end = time.time()
     print(f"Czas wykonania: {end - start:.2f} sekund")

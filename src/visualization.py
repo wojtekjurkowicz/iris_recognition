@@ -46,7 +46,9 @@ def visualize_pipeline_for_user(dataset_path):
         print(f"Błąd wczytywania obrazu: {image_path}")
         return
 
-    segmented = segment_iris(img)
+    # Ścieżka debug zapisu wykrycia
+    debug_img_path = os.path.join("outputs", f"debug_user_{user_folder}.png")
+    segmented = segment_iris(img, debug_path=debug_img_path)
 
     # Wyświetl porównanie
     plt.figure(figsize=(10, 4))
@@ -59,6 +61,15 @@ def visualize_pipeline_for_user(dataset_path):
     plt.title("Po segmentacji (tęczówka)")
     plt.imshow(segmented, cmap='gray')
     plt.axis('off')
+
+    # Dodaj debugowy obraz z okręgiem
+    if os.path.exists(debug_img_path):
+        debug_img = cv2.imread(debug_img_path)
+        debug_img = cv2.cvtColor(debug_img, cv2.COLOR_BGR2RGB)
+        plt.subplot(1, 3, 3)
+        plt.title("Debug (wykryty okrąg)")
+        plt.imshow(debug_img)
+        plt.axis('off')
 
     plt.suptitle(f"Użytkownik: {user_folder} | Plik: {chosen_file}")
     os.makedirs("outputs", exist_ok=True)
@@ -111,3 +122,46 @@ def plot_confusion_matrix(cm_path="outputs/confusion_matrix.npy"):
     plt.tight_layout()
     plt.savefig("outputs/confusion_matrix_plot.png")
     plt.close()
+
+
+def visualize_fallback_samples(n=8):
+    fallback_dir = "fallbacks"
+    if not os.path.exists(fallback_dir):
+        print("[WARN] Brak folderu fallbacks/")
+        return
+    files = [f for f in os.listdir(fallback_dir) if f.endswith(".png")]
+    if not files:
+        print("[INFO] Brak fallbacków do wizualizacji.")
+        return
+
+    chosen = random.sample(files, min(n, len(files)))
+    plt.figure(figsize=(15, 5))
+    for i, fname in enumerate(chosen):
+        img = cv2.imread(os.path.join(fallback_dir, fname), cv2.IMREAD_GRAYSCALE)
+        plt.subplot(1, n, i+1)
+        plt.imshow(img, cmap='gray')
+        plt.title(fname)
+        plt.axis("off")
+    plt.tight_layout()
+    os.makedirs("outputs", exist_ok=True)
+    plt.savefig("outputs/fallback_samples.png")
+    plt.close()
+    print(f"[INFO] Zapisano fallback_samples.png")
+
+
+def analyze_fallback_patterns(dataset_path=""):
+    fallback_dir = "fallbacks"
+    if not os.path.exists(fallback_dir):
+        return
+
+    user_counts = {}
+    for fname in os.listdir(fallback_dir):
+        if "_" in fname:
+            uid = fname.split("_")[1].split(".")[0]
+            user_counts[uid] = user_counts.get(uid, 0) + 1
+
+    if user_counts:
+        sorted_counts = sorted(user_counts.items(), key=lambda x: x[1], reverse=True)
+        print("[ANALIZA] Najczęstsze fallbacki dla użytkowników:")
+        for uid, count in sorted_counts[:10]:
+            print(f"Użytkownik {uid}: {count} fallbacków")
