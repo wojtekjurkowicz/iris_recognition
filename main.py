@@ -1,6 +1,8 @@
 import argparse
 import os
 import time
+import tensorflow as tf
+from tensorflow.sysconfig import get_build_info as tf_build_info
 from src.data_loader import load_or_segment_data
 from src.config import DATASET_PATH
 from keras import config
@@ -59,6 +61,8 @@ def main():
 
 if __name__ == "__main__":
     import sys
-
+    print("GPU available", tf.config.list_physical_devices('GPU'))
+    print(tf.__version__)
+    print(tf_build_info())
     sys.argv = ["program", "--subset", "10000"]
     main()
