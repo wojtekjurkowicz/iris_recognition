@@ -52,7 +52,7 @@ def main():
     print(class_counts)
 
     if not args.no_viz:
-        visualize_pipeline_for_user("005", DATASET_PATH)
+        visualize_pipeline_for_user(DATASET_PATH)
 
     end = time.time()
     print(f"Czas wykonania: {end - start:.2f} sekund")

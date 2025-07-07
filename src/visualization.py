@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -24,17 +26,24 @@ def plot_tsne(X_tsne, labels, title="t-SNE", filename="tsne_plot.png"):
     plt.close()
 
 
-def visualize_pipeline_for_user(class_id, dataset_path):
-    # znajdź pierwsze zdjęcie danej klasy
-    for fname in os.listdir(dataset_path):
-        if class_id in fname:
-            img_path = os.path.join(dataset_path, fname)
-            break
-    else:
-        print(f"Nie znaleziono próbki z klasą {class_id}")
+def visualize_pipeline_for_user(dataset_path):
+    files = [f for f in os.listdir(dataset_path) if f.endswith(('.png', '.jpg', '.jpeg'))]
+    if not files:
+        print("[BŁĄD] Brak obrazów w folderze.")
         return
 
+    fname = random.choice(files)
+    class_id = fname[:3]  # zakładamy, że nazwa pliku zaczyna się od np. "005_xxx.png"
+    print(f"[INFO] Losowo wybrano klasę: {class_id}")
+
+    img_path = os.path.join(dataset_path, fname)
+    print(f"[DEBUG] Ładowanie pliku: {img_path}")
+
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if img is None or img.size == 0:
+        print(f"[BŁĄD] Nie można wczytać obrazu: {img_path}")
+        return
+
     segmented = segment_iris(img)
 
     plt.subplot(1, 2, 1)
