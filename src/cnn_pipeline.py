@@ -112,8 +112,9 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
     else:
-        embedding_model = build_embedding_model((*IMG_SIZE, 3))
-        model = build_classifier_model(embedding_model, num_classes=len(classes))
+        with tf.device('/GPU:0'):
+            embedding_model = build_embedding_model((*IMG_SIZE, 3))
+            model = build_classifier_model(embedding_model, num_classes=len(classes))
 
         loss_fn = tf.keras.losses.CategoricalCrossentropy(label_smoothing=0.1)
         model.compile(optimizer='adam', loss=loss_fn, metrics=['accuracy'])
@@ -130,10 +131,15 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         ]
         assert len(train_gen) > 0, "train_gen is empty"
         assert len(test_gen) > 0, "test_gen is empty"
+        import time
+        start_train = time.time()
         model.fit(train_gen, validation_data=test_gen, epochs=epochs, callbacks=callbacks,
                   class_weight=class_weights, verbose=1)
+        print(f"[TIMER] Training time: {time.time() - start_train:.2f}s")
 
+        start_eval = time.time()
         loss, acc = model.evaluate(test_gen)
+        print(f"[TIMER] Evaluation time: {time.time() - start_eval:.2f}s")
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
 
         print("[PREDICTING TEST]: using full batch predict")
@@ -145,7 +151,10 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         X_all = np.concatenate(X_all, axis=0)
         y_all = np.concatenate(y_all, axis=0)
 
+        start_pred = time.time()
         preds = model.predict(X_all, verbose=1)
+        print(f"[TIMER] Prediction time: {time.time() - start_pred:.2f}s")
+
         y_true = np.argmax(y_all, axis=1)
         y_pred = np.argmax(preds, axis=1)
 
@@ -155,3 +164,6 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         plot_training_metrics()
         plot_confusion_matrix()
 
+        from keras import backend as K
+        del model
+        K.clear_session()
