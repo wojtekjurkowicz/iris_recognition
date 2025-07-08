@@ -136,16 +136,18 @@ def run_cnn(X, y, epochs=None, batch_size=None):
         loss, acc = model.evaluate(test_gen)
         print(f"[SOFTMAX] Test accuracy: {acc:.4f}")
 
-        from tqdm import tqdm
+        print("[PREDICTING TEST]: using full batch predict")
+        X_all, y_all = [], []
+        for X_batch, y_batch in test_gen:
+            X_all.append(X_batch)
+            y_all.append(y_batch)
 
-        y_true, y_pred = [], []
-        for X_batch, y_batch in tqdm(test_gen, desc="[PREDICTING TEST]"):
-            if len(X_batch) == 0:
-                continue
+        X_all = np.concatenate(X_all, axis=0)
+        y_all = np.concatenate(y_all, axis=0)
 
-            preds = model.predict(X_batch, verbose=0)
-            y_true.extend(np.argmax(y_batch, axis=1))
-            y_pred.extend(np.argmax(preds, axis=1))
+        preds = model.predict(X_all, verbose=1)
+        y_true = np.argmax(y_all, axis=1)
+        y_pred = np.argmax(preds, axis=1)
 
         print("[SOFTMAX] Classification report:")
         save_classification_report(y_true, y_pred, out_path="outputs/report.txt")
